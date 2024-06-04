@@ -6,10 +6,10 @@ export function effect(fn: () => void): Tracker {
 		() => { },
 		() => {
 			if (tracker.dirty) {
-				tracker.track(fn);
+				tracker.active(fn);
 			}
 		});
-	tracker.track(fn);
+	tracker.active(fn);
 
 	return tracker;
 }

@@ -1,4 +1,4 @@
-import { DirtyLevels, activeTrackers, cleanupDepEffect, depsMap, pauseTracking, resetTracking } from './system';
+import { DirtyLevels, activeTrackersInCurrentCallStack, cleanupDepEffect, trackerDepsMap, pauseTracking, resetTracking } from './system';
 
 export type TrackToken = WeakRef<Tracker> | Tracker;
 
@@ -20,7 +20,7 @@ export class Tracker {
 		if (this.dirtyLevel === DirtyLevels.ComputedValueMaybeDirty) {
 			this.dirtyLevel = DirtyLevels.NotDirty;
 			if (this.trackToken) {
-				const deps = depsMap.get(this.trackToken);
+				const deps = trackerDepsMap.get(this.trackToken);
 				if (deps) {
 					this.queryings++;
 					pauseTracking();
@@ -40,16 +40,16 @@ export class Tracker {
 		return this.dirtyLevel >= DirtyLevels.ComputedValueDirty;
 	}
 
-	track<T>(fn: () => T): T {
+	active<T>(fn: () => T): T {
 		try {
-			activeTrackers.push(this);
+			activeTrackersInCurrentCallStack.push(this);
 			this.runnings++;
 			preCleanup(this);
 			return fn();
 		} finally {
 			postCleanup(this);
 			this.runnings--;
-			activeTrackers.pop();
+			activeTrackersInCurrentCallStack.pop();
 			if (!this.runnings) {
 				this.dirtyLevel = DirtyLevels.NotDirty;
 			}
@@ -68,13 +68,13 @@ export class Tracker {
 }
 
 function preCleanup(tracker: Tracker) {
-	tracker.trackId++;
+	tracker.trackId++;    //每调用一次trackId就变了
 	tracker.depsLength = 0;
 }
 
 function postCleanup(tracker: Tracker) {
 	if (tracker.trackToken) {
-		const deps = depsMap.get(tracker.trackToken);
+		const deps = trackerDepsMap.get(tracker.trackToken);
 		if (deps && deps.length > tracker.depsLength) {
 			for (let i = tracker.depsLength; i < deps.length; i++) {
 				cleanupDepEffect(deps[i], tracker);

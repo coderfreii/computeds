@@ -1,4 +1,4 @@
-import { DirtyLevels, track, trigger } from './system';
+import { DirtyLevels, setupTrackContext, trigger } from './system';
 import { Dep } from './dep';
 
 export interface Signal<T = any> {
@@ -13,7 +13,7 @@ export function signal<T>(oldValue?: T): Signal<T | undefined> {
 
 	const dep = new Dep();
 	const fn = (() => {
-		track(dep);
+		setupTrackContext(dep);
 		return oldValue;
 	}) as Signal;
 
