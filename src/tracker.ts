@@ -1,4 +1,4 @@
-import { DirtyLevels, activeTrackersInCurrentCallStack, cleanupDepEffect, trackerDepsMap, pauseTracking, resetTracking } from './system';
+import { DirtyLevels, activeTrackersInCurrentCallStack, cleanupDepEffect, outerTrackerDepsMap, pauseTracking, resetTracking } from './system';
 
 export type TrackToken = WeakRef<Tracker> | Tracker;
 
@@ -6,7 +6,7 @@ export class Tracker {
 
 	trackToken?: TrackToken;
 	dirtyLevel = DirtyLevels.Dirty;
-	trackId = 0;
+	activeNo = 0;  //表明第几次active
 	runnings = 0;
 	queryings = 0;
 	depsLength = 0;
@@ -16,11 +16,16 @@ export class Tracker {
 		public effect?: () => void,
 	) { }
 
+
+	setDirtyLevel(dirtyLevel:DirtyLevels){
+		this.dirtyLevel = dirtyLevel
+	}
+
 	get dirty() {
-		if (this.dirtyLevel === DirtyLevels.ComputedValueMaybeDirty) {
-			this.dirtyLevel = DirtyLevels.NotDirty;
+		if (this.dirtyLevel === DirtyLevels.ComputedValueMaybeDirty) {   //excute after trigger whith ComputedValueMaybeDirty
+			this.setDirtyLevel( DirtyLevels.NotDirty)
 			if (this.trackToken) {
-				const deps = trackerDepsMap.get(this.trackToken);
+				const deps = outerTrackerDepsMap.get(this.trackToken);
 				if (deps) {
 					this.queryings++;
 					pauseTracking();
@@ -51,7 +56,7 @@ export class Tracker {
 			this.runnings--;
 			activeTrackersInCurrentCallStack.pop();
 			if (!this.runnings) {
-				this.dirtyLevel = DirtyLevels.NotDirty;
+				this.setDirtyLevel(DirtyLevels.NotDirty)
 			}
 		}
 	}
@@ -59,7 +64,7 @@ export class Tracker {
 	reset() {
 		preCleanup(this);
 		postCleanup(this);
-		this.dirtyLevel = DirtyLevels.Dirty;
+		this.setDirtyLevel(DirtyLevels.Dirty)
 	}
 
 	deref() {
@@ -68,13 +73,13 @@ export class Tracker {
 }
 
 function preCleanup(tracker: Tracker) {
-	tracker.trackId++;    //每调用一次trackId就变了
+	tracker.activeNo++;    //active次数加一
 	tracker.depsLength = 0;
 }
 
 function postCleanup(tracker: Tracker) {
 	if (tracker.trackToken) {
-		const deps = trackerDepsMap.get(tracker.trackToken);
+		const deps = outerTrackerDepsMap.get(tracker.trackToken);
 		if (deps && deps.length > tracker.depsLength) {
 			for (let i = tracker.depsLength; i < deps.length; i++) {
 				cleanupDepEffect(deps[i], tracker);

@@ -1,4 +1,4 @@
-import { DirtyLevels, setupTrackContext, trigger } from './system';
+import { DirtyLevels, collectOuterTrackerContext, trigger } from './system';
 import { Dep } from './dep';
 
 export interface Signal<T = any> {
@@ -11,14 +11,14 @@ export function signal<T>(): Signal<T | undefined>;
 export function signal<T>(oldValue: T): Signal<T>;
 export function signal<T>(oldValue?: T): Signal<T | undefined> {
 
-	const dep = new Dep();
+	const outerTrackers = new Dep();
 	const fn = (() => {
-		setupTrackContext(dep);
+		collectOuterTrackerContext(outerTrackers);
 		return oldValue;
 	}) as Signal;
 
 	fn.markDirty = () => {
-		trigger(dep, DirtyLevels.Dirty);
+		trigger(outerTrackers, DirtyLevels.Dirty);
 	};
 	fn.set = (newValue) => {
 		if (!Object.is(oldValue, oldValue = newValue)) {

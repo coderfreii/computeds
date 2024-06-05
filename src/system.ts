@@ -41,7 +41,10 @@ export const activeTrackersInCurrentCallStack = {
 	},
 	shift(){
 		return _activeTrackersInCurrentCallStack.shift()
-	}
+	},
+	get length(){
+		return _activeTrackersInCurrentCallStack.length
+	},
 }
 
 export function pauseTracking() {
@@ -64,10 +67,10 @@ export function resetEffect() {
 	}
 }
 
-export const trackerDepsMap = new WeakMap<TrackToken, Dep[]>();
+export const outerTrackerDepsMap = new WeakMap<TrackToken, Dep[]>();
 
 const trackerRegistry = new FinalizationRegistry<WeakRef<Tracker>>(trackToken => {
-	const deps = trackerDepsMap.get(trackToken);
+	const deps = outerTrackerDepsMap.get(trackToken);
 	if (deps) {
 		for (const dep of deps) {
 			dep.delete(trackToken);
@@ -77,7 +80,7 @@ const trackerRegistry = new FinalizationRegistry<WeakRef<Tracker>>(trackToken =>
 });
 
 
-function getCurrentCallStackTopTracker() {
+function getCurrentOuterTracker() {
 	if (_activeTrackersInCurrentCallStack.length) {
 		const tracker = _activeTrackersInCurrentCallStack[_activeTrackersInCurrentCallStack.length - 1];
 		if (!tracker.trackToken) {
@@ -87,7 +90,7 @@ function getCurrentCallStackTopTracker() {
 				tracker.trackToken = new WeakRef(tracker);
 				trackerRegistry.register(tracker, tracker.trackToken, tracker);
 			}
-			trackerDepsMap.set(tracker.trackToken, []);
+			outerTrackerDepsMap.set(tracker.trackToken, []);
 		}
 
 		return tracker;
@@ -95,23 +98,24 @@ function getCurrentCallStackTopTracker() {
 }
 
 
-export function setupTrackContext(dep: Dep) {  
-	const topTracker = getCurrentCallStackTopTracker();
-	if (topTracker && topTracker.trackToken) {
+export function collectOuterTrackerContext(outerTrackers: Dep) {  
+	const outerTracker = getCurrentOuterTracker();
+	if (outerTracker && outerTracker.trackToken) {
 		//
-		const trackToken = topTracker.trackToken;
-		const deps = trackerDepsMap.get(trackToken);  //获取当前激活的tracker的所有的下游依赖
-		if (deps) {
-			if (dep.get(topTracker) !== topTracker.trackId) {  //判断父tracker是否记录， 如果记录了判断是否是记录的那次active调用    父tracker active每次调用会导致 trackId不一样
-				dep.set(topTracker, topTracker.trackId);   //将父tracker放进去
-				const oldDep = deps[topTracker.depsLength];  //取最后一个依赖 跟当前不相等
-				if (oldDep !== dep) {
+		const trackToken = outerTracker.trackToken;
+		const outerTrackerDeps = outerTrackerDepsMap.get(trackToken);  //获取当前激活的outerTracker的所有的下游依赖
+		if (outerTrackerDeps) {
+			if (outerTrackers.get(outerTracker) !== outerTracker.activeNo) {    //computed第一次check是否放入, 放入后每次check  outerTracker的aactive的次数是否匹配 不匹配才能进入
+				outerTrackers.set(outerTracker, outerTracker.activeNo);  
+
+				const oldDep = outerTrackerDeps[outerTracker.depsLength];  //取最新一个依赖 跟当前不相等
+				if (oldDep !== outerTrackers) {
 					if (oldDep) {
-						cleanupDepEffect(oldDep, topTracker);
+						cleanupDepEffect(oldDep, outerTracker);
 					}
-					deps[topTracker.depsLength++] = dep;   //放入当前tracker的依赖
+					outerTrackerDeps[outerTracker.depsLength++] = outerTrackers;   //放入outerTracker.depsLength的位置
 				} else {
-					topTracker.depsLength++;
+					outerTracker.depsLength++;
 				}
 			}
 		}
@@ -121,31 +125,31 @@ export function setupTrackContext(dep: Dep) {
 
 export function cleanupDepEffect(dep: Dep, tracker: Tracker) {
 	const trackId = dep.get(tracker);
-	if (trackId !== undefined && tracker.trackId !== trackId) {
+	if (trackId !== undefined && tracker.activeNo !== trackId) {
 		dep.delete(tracker);
 	}
 }
 
-export function trigger(dep: Dep, dirtyLevel: DirtyLevels) {
+export function trigger(outerTrackers: Dep, expectDirtyLevel: DirtyLevels) {
 	pauseEffect();
-	for (const trackToken of dep.keys()) {
-		const tracker = trackToken.deref();
-		if (!tracker) {
+	for (const outerTrackToken of outerTrackers.keys()) {
+		const outerTracker = outerTrackToken.deref();
+		if (!outerTracker) {
 			continue;
 		}
 		if (
-			tracker.dirtyLevel < dirtyLevel &&
-			(!tracker.runnings || dirtyLevel !== DirtyLevels.ComputedValueDirty)
+			outerTracker.dirtyLevel < expectDirtyLevel &&    //expectDirtyLevel need be dirty more than before the tracker was 
+			(!outerTracker.runnings || expectDirtyLevel !== DirtyLevels.ComputedValueDirty)
 		) {
-			const lastDirtyLevel = tracker.dirtyLevel;
-			tracker.dirtyLevel = dirtyLevel;
+			const lastDirtyLevel = outerTracker.dirtyLevel;
+			outerTracker.setDirtyLevel(expectDirtyLevel);
 			if (
-				lastDirtyLevel === DirtyLevels.NotDirty &&
-				(!tracker.queryings || dirtyLevel !== DirtyLevels.ComputedValueDirty)
+				lastDirtyLevel === DirtyLevels.NotDirty &&   //if the tracker was NotDirty
+				(!outerTracker.queryings || expectDirtyLevel !== DirtyLevels.ComputedValueDirty)
 			) {
-				tracker.spread();
-				if (tracker.effect) {
-					pausedEffects.push(tracker);
+				outerTracker.spread();
+				if (outerTracker.effect) {
+					pausedEffects.push(outerTracker);
 				}
 			}
 		}
