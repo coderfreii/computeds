@@ -56,13 +56,13 @@ export function resetTracking() {
 	_activeTrackersInCurrentCallStack = pausedTrackers.pop()!;
 }
 
-export function pauseEffect() {
+export function pauseAllEffectHasNotRun() {
 	pauseEffectStack++;
 }
 
-export function resetEffect() {
+export function tryWithdrawPauseAndRun() {
 	pauseEffectStack--;
-	while (!pauseEffectStack && pausedEffects.length) {
+	while (pauseEffectStack <= 0 && pausedEffects.length) {  //make it clear to read
 		pausedEffects.shift()!.effect!();
 	}
 }
@@ -82,18 +82,18 @@ const trackerRegistry = new FinalizationRegistry<WeakRef<Tracker>>(trackToken =>
 
 function getCurrentOuterTracker() {
 	if (_activeTrackersInCurrentCallStack.length) {
-		const tracker = _activeTrackersInCurrentCallStack[_activeTrackersInCurrentCallStack.length - 1];
-		if (!tracker.trackToken) {
-			if (tracker.effect) {
-				tracker.trackToken = tracker;
+		const currentOuterTracker = _activeTrackersInCurrentCallStack[_activeTrackersInCurrentCallStack.length - 1];
+		if (!currentOuterTracker.trackToken) {
+			if (currentOuterTracker.effect) {
+				currentOuterTracker.trackToken = currentOuterTracker;
 			} else {
-				tracker.trackToken = new WeakRef(tracker);
-				trackerRegistry.register(tracker, tracker.trackToken, tracker);
+				currentOuterTracker.trackToken = new WeakRef(currentOuterTracker);
+				trackerRegistry.register(currentOuterTracker, currentOuterTracker.trackToken, currentOuterTracker);
 			}
-			outerTrackerDepsMap.set(tracker.trackToken, []);
+			outerTrackerDepsMap.set(currentOuterTracker.trackToken, []);
 		}
 
-		return tracker;
+		return currentOuterTracker;
 	}
 }
 
@@ -131,28 +131,28 @@ export function cleanupDepEffect(dep: Dep, tracker: Tracker) {
 }
 
 export function trigger(outerTrackers: Dep, expectDirtyLevel: DirtyLevels) {
-	pauseEffect();
+	pauseAllEffectHasNotRun();
 	for (const outerTrackToken of outerTrackers.keys()) {
 		const outerTracker = outerTrackToken.deref();
 		if (!outerTracker) {
 			continue;
 		}
 		if (
-			outerTracker.dirtyLevel < expectDirtyLevel &&    //expectDirtyLevel need be dirty more than before the tracker was 
+			outerTracker.dirtyLevel < expectDirtyLevel &&    //expectDirtyLevel need be dirty more than the tracker was before
 			(!outerTracker.runnings || expectDirtyLevel !== DirtyLevels.ComputedValueDirty)
 		) {
 			const lastDirtyLevel = outerTracker.dirtyLevel;
 			outerTracker.setDirtyLevel(expectDirtyLevel);
 			if (
 				lastDirtyLevel === DirtyLevels.NotDirty &&   //if the tracker was NotDirty
-				(!outerTracker.queryings || expectDirtyLevel !== DirtyLevels.ComputedValueDirty)
+				(!outerTracker.checkingDirty || expectDirtyLevel !== DirtyLevels.ComputedValueDirty)
 			) {
-				outerTracker.spread();
+				outerTracker.spreadUp();
 				if (outerTracker.effect) {
 					pausedEffects.push(outerTracker);
 				}
 			}
 		}
 	}
-	resetEffect();
+	tryWithdrawPauseAndRun();
 }

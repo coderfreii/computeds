@@ -8,11 +8,11 @@ export class Tracker {
 	dirtyLevel = DirtyLevels.Dirty;
 	activeNo = 0;  //表明第几次active
 	runnings = 0;
-	queryings = 0;
+	checkingDirty = 0;
 	depsLength = 0;
 
 	constructor(
-		public spread: () => void,
+		public spreadUp: () => void,
 		public effect?: () => void,
 	) { }
 
@@ -27,7 +27,7 @@ export class Tracker {
 			if (this.trackToken) {
 				const deps = outerTrackerDepsMap.get(this.trackToken);
 				if (deps) {
-					this.queryings++;
+					this.checkingDirty++;
 					pauseTracking();
 					for (const dep of deps) {
 						if (dep.computed) {
@@ -38,7 +38,7 @@ export class Tracker {
 						}
 					}
 					resetTracking();
-					this.queryings--;
+					this.checkingDirty--;
 				}
 			}
 		}
