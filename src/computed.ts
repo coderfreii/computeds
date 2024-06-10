@@ -1,7 +1,7 @@
 import { Tracker } from './tracker';
 import { DirtyLevels, collectOuterTrackerContext, trigger } from './system';
 import { Dep } from './dep';
-import { signal } from './signal';
+// import { signal } from './signal';
 
 export function computed<T>(getterForTrackerActive: (oldValue?: T) => T) {
 
@@ -29,35 +29,35 @@ export function computed<T>(getterForTrackerActive: (oldValue?: T) => T) {
 }
 
 
-const c = computed((old?: number) => {
-	return old || -1;
-});
+// const c = computed((old?: number) => {
+// 	return old || -1;
+// });
 
-const c1 = computed((old1?: number) => {
-	c()
-	return old1 || -1;
-});
+// const c1 = computed((old1?: number) => {
+// 	c()
+// 	return old1 || -1;
+// });
 
-const c2 = computed((old2?: number) => {
-	c1()
-	return old2 || -1;
-});
+// const c2 = computed((old2?: number) => {
+// 	c1()
+// 	return old2 || -1;
+// });
 
-const s1 = signal(true);
+// const s1 = signal(true);
 
-const c3 = computed((old3?: boolean) => {
-	s1()
-	c2()
-	s1
-	return !!!old3;
-});
+// const c3 = computed((old3?: boolean) => {
+// 	s1()
+// 	c2()
+// 	s1
+// 	return !!!old3;
+// });
 
 
 
-console.log(c3());
-s1.set(false)
-console.log(c3());
-console.log();
+// console.log(c3());
+// s1.set(false)
+// console.log(c3());
+// console.log();
 
 
 
