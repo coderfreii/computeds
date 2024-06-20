@@ -1,7 +1,6 @@
 import { Tracker } from './tracker';
 import { DirtyLevels, collectOuterTrackerContext, trigger } from './system';
 import { Dep } from './dep';
-// import { signal } from './signal';
 
 export function computed<T>(getterForTrackerActive: (oldValue?: T) => T) {
 
